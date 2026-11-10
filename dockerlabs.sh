@@ -1,6 +1,6 @@
 #!/bin/bash
-# dockerlabs.sh - Lista y descarga máquinas de DockerLabs (https://dockerlabs.es)
-# y sus writeups. Proyecto no oficial, sin relación con DockerLabs.
+# dockerlabs.sh - Lista y descarga máquinas de DockerLabs (https://dockerlabs.es),
+# las gratuitas de BunkerLabs (modo de prueba) y sus writeups. Proyecto no oficial, sin relación con DockerLabs.
 #
 # Necesita: curl y python3 (vienen de serie en Kali).
 # Los writeups solo se bajan si están en GitHub como archivo .md.
@@ -12,7 +12,7 @@ VERDE="\e[32m"; ROJO="\e[31m"; AMARILLO="\e[33m"; AZUL="\e[34m"; FIN="\e[0m"
 
 ayuda() {
     echo -e "\nUso: $0 [opciones]\n"
-    echo -e "  -l               Lista todas las máquinas"
+    echo -e "  -l               Lista todas las máquinas (DockerLabs y las gratuitas de BunkerLabs)"
     echo -e "  -x <dificultad>  Lista las máquinas de una dificultad y te deja elegir una para descargar"
     echo -e "                   (muy-facil, facil, medio, dificil)"
     echo -e "  -xr <dificultad> Descarga una máquina al azar de esa dificultad y un writeup al azar de ella"
@@ -50,7 +50,25 @@ for nombre, dif, mid in re.findall(patron, s, re.S):
     nombre = json.loads(nombre)
     clave = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode()
     clave = clave.lower().replace(" ", "-").replace("_", "-")
-    print(f"{mid}\t{json.loads(dif)}\t{nombre}\t{clave}")
+    print(f"maquinas/{mid}\t{json.loads(dif)}\t{nombre}\t{clave}")
+PY
+
+# Programa de Python que lee las máquinas de BunkerLabs y se queda solo con
+# las gratuitas (las que el modo de prueba deja descargar)
+read -r -d '' LEER_BUNKER <<'PY'
+import sys, re, html, unicodedata
+s = sys.stdin.read()
+nombres = {"muy-facil": "Muy Fácil", "facil": "Fácil", "medio": "Medio", "dificil": "Difícil"}
+patron = (r'(?s)<div class="item ([a-z-]+) item-selectable[^"]*"\s+data-nombre="([^"]*)"'
+          r'(.*?)(?=<div class="item |<!-- END OF MACHINES GRID)')
+for clase, nombre, bloque in re.findall(patron, s):
+    enlace = re.search(r'data-link="/(bunkerlabs/maquinas/\d+)/descargar"', bloque)
+    if not enlace:
+        continue  # bloqueada: solo para alumnos
+    nombre = html.unescape(nombre)
+    clave = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode()
+    clave = clave.lower().replace(" ", "-").replace("_", "-")
+    print(f"{enlace[1]}\t{nombres.get(clase, clase)}\t{nombre}\t{clave}")
 PY
 
 # Programa de Python que lee la lista de writeups y se queda solo con los
@@ -74,8 +92,13 @@ for w in datos:
     print(f"{autor}\t{url}\t{raw}")
 PY
 
+# Galletas (cookies) para el modo de prueba de BunkerLabs. Se borran al salir.
+GALLETAS=$(mktemp)
+trap 'rm -f "$GALLETAS"' EXIT
+
 # Descarga la portada y guarda en CATALOGO una línea por máquina:
-# id<TAB>dificultad<TAB>nombre
+# ruta<TAB>dificultad<TAB>nombre<TAB>nombre-sin-tildes
+# (ruta es "maquinas/123" en DockerLabs o "bunkerlabs/maquinas/123" en BunkerLabs)
 cargar_catalogo() {
     local html
     if ! html=$(curl -A "$UA" -sfL -m 30 "$WEB"); then
@@ -87,7 +110,19 @@ cargar_catalogo() {
         echo -e "${ROJO}[-] No se pudo leer la lista de máquinas (¿ha cambiado la web?).${FIN}" >&2
         exit 1
     fi
+
+    # Máquinas gratuitas de BunkerLabs: entramos en su modo de prueba público
+    local bunker
+    bunker=$(curl -A "$UA" -sfL -m 30 -c "$GALLETAS" -b "$GALLETAS" "$WEB/bunkerlabs/guest" \
+        | python3 -c "$LEER_BUNKER")
+    if [ -n "$bunker" ]; then
+        CATALOGO="$CATALOGO"$'\n'"$bunker"
+    else
+        echo -e "${AMARILLO}[!] No se pudieron cargar las máquinas de BunkerLabs. Sigo solo con DockerLabs.${FIN}" >&2
+    fi
 }
+
+es_bunker() { [[ "$1" == bunkerlabs/* ]]; }
 
 catalogo() { echo "$CATALOGO"; }
 
@@ -102,8 +137,10 @@ imprimir() {
             medio)     color=$AMARILLO ;;
             *)         color=$ROJO ;;
         esac
+        local origen=""
+        es_bunker "$id" && origen="  [BunkerLabs]"
         # Relleno a mano: printf cuenta bytes y las tildes ocupan 2
-        printf "  %3d) %s%*s ${color}%s${FIN}\n" "$i" "$nombre" $((30 - ${#nombre})) "" "$dif"
+        printf "  %3d) %s%*s ${color}%-10s${FIN}%s\n" "$i" "$nombre" $((30 - ${#nombre})) "" "$dif" "$origen"
     done
 }
 
@@ -132,7 +169,7 @@ descargar() {
     local id dif nombre zip archivo
     IFS=$'\t' read -r id dif nombre <<< "$1"
     echo -e "\n${AZUL}[+]${FIN} Buscando la descarga de ${VERDE}$nombre${FIN} ($dif)..."
-    zip=$(curl -A "$UA" -sfL -m 30 "$WEB/maquinas/$id/descargar" \
+    zip=$(curl -A "$UA" -sfL -m 30 -b "$GALLETAS" "$WEB/$id/descargar" \
         | grep -oE 'https://gestion-maquinas\.dockerlabs\.es/dl/[^"]+\.zip' | head -1)
     if [ -z "$zip" ]; then
         echo -e "${ROJO}[-] No encontré el enlace de descarga de $nombre.${FIN}"
@@ -180,6 +217,10 @@ writeup() {
     local linea id dif json lista total eleccion
     linea=$(buscar "$1") || return 1
     IFS=$'\t' read -r id dif NOMBRE_MAQUINA <<< "$linea"
+    if es_bunker "$id"; then
+        echo -e "${AMARILLO}[!] $NOMBRE_MAQUINA es de BunkerLabs, y esas máquinas no tienen writeups.${FIN}"
+        return 1
+    fi
 
     json=$(curl -A "$UA" -sfL -m 30 "$WEB/api/writeups/$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$NOMBRE_MAQUINA")")
     lista=$(echo "$json" | python3 -c "$LEER_WRITEUPS")

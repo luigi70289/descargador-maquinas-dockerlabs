@@ -1,7 +1,8 @@
 # descargador-maquinas-dockerlabs
 
 Script en Bash para descargar máquinas de [DockerLabs](https://dockerlabs.es) desde la terminal,
-junto con un writeup de cada una para cuando te atasques.
+junto con un writeup de cada una para cuando te atasques. También incluye las máquinas gratuitas
+de [BunkerLabs](https://dockerlabs.es/bunkerlabs).
 
 Puedes buscar las máquinas por nombre o por dificultad, o dejar que el script elija una al azar.
 
@@ -26,7 +27,7 @@ chmod +x dockerlabs.sh
 
 | Comando | Qué hace |
 |---|---|
-| `./dockerlabs.sh -l` | Lista todas las máquinas con su dificultad |
+| `./dockerlabs.sh -l` | Lista todas las máquinas con su dificultad (DockerLabs y las gratuitas de BunkerLabs) |
 | `./dockerlabs.sh -x <dificultad>` | Lista las máquinas de esa dificultad y te deja elegir una para descargar (`r` = una al azar) |
 | `./dockerlabs.sh -xr <dificultad>` | Descarga una máquina al azar de esa dificultad y un writeup al azar de ella |
 | `./dockerlabs.sh -n <nombre>` | Descarga solo la máquina |
@@ -56,6 +57,17 @@ Todo se guarda en la carpeta desde la que ejecutas el script:
 
 - `<maquina>.zip`: la máquina. Dentro vienen `<maquina>.tar` y `auto_deploy.sh`.
 - `<Maquina>_writeup_<autor>.md`: el writeup, en Markdown.
+
+## Máquinas de BunkerLabs
+
+BunkerLabs es la zona de DockerLabs para alumnos de algunas academias. La mayoría de sus máquinas
+piden contraseña, pero tiene un [modo de prueba](https://dockerlabs.es/bunkerlabs/guest) público con
+algunas gratuitas. El script entra en ese modo de prueba y añade esas máquinas a la lista.
+
+- En la lista salen marcadas con `[BunkerLabs]`.
+- Se buscan y se descargan igual que las demás: `./dockerlabs.sh -n graphy`.
+- No tienen writeups. Con `-w` o `-wr` se descarga la máquina y el script avisa de que no hay writeup.
+- Las máquinas que piden contraseña no aparecen.
 
 ## Desplegar la máquina
 
