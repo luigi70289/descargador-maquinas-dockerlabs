@@ -1,11 +1,13 @@
 #!/bin/bash
 # dockerlabs.sh - Lista y descarga máquinas de DockerLabs (https://dockerlabs.es)
-# y sus writeups.
+# y sus writeups. Proyecto no oficial, sin relación con DockerLabs.
 #
 # Necesita: curl y python3 (vienen de serie en Kali).
 # Los writeups solo se bajan si están en GitHub como archivo .md.
 
 WEB="https://dockerlabs.es"
+# Nombre con el que el script se presenta a la web, para que DockerLabs sepa de dónde vienen las peticiones
+UA="descargador-maquinas-dockerlabs/1.0 (+https://github.com/luigi70289/descargador-maquinas-dockerlabs)"
 VERDE="\e[32m"; ROJO="\e[31m"; AMARILLO="\e[33m"; AZUL="\e[34m"; FIN="\e[0m"
 
 ayuda() {
@@ -76,7 +78,7 @@ PY
 # id<TAB>dificultad<TAB>nombre
 cargar_catalogo() {
     local html
-    if ! html=$(curl -sfL -m 30 "$WEB"); then
+    if ! html=$(curl -A "$UA" -sfL -m 30 "$WEB"); then
         echo -e "${ROJO}[-] No se pudo conectar con DockerLabs.${FIN}" >&2
         exit 1
     fi
@@ -130,14 +132,14 @@ descargar() {
     local id dif nombre zip archivo
     IFS=$'\t' read -r id dif nombre <<< "$1"
     echo -e "\n${AZUL}[+]${FIN} Buscando la descarga de ${VERDE}$nombre${FIN} ($dif)..."
-    zip=$(curl -sfL -m 30 "$WEB/maquinas/$id/descargar" \
+    zip=$(curl -A "$UA" -sfL -m 30 "$WEB/maquinas/$id/descargar" \
         | grep -oE 'https://gestion-maquinas\.dockerlabs\.es/dl/[^"]+\.zip' | head -1)
     if [ -z "$zip" ]; then
         echo -e "${ROJO}[-] No encontré el enlace de descarga de $nombre.${FIN}"
         return 1
     fi
     archivo=$(basename "$zip")
-    if curl -fL --progress-bar -o "$archivo" "$zip"; then
+    if curl -A "$UA" -fL --progress-bar -o "$archivo" "$zip"; then
         echo -e "${VERDE}[+] Descargada: $archivo${FIN}"
         echo -e "    Para empezar:"
         echo -e "      unzip $archivo"
@@ -154,7 +156,7 @@ bajar_writeup() {
     local autor url raw archivo
     IFS=$'\t' read -r autor url raw <<< "$1"
     archivo="${NOMBRE_MAQUINA// /_}_writeup_${autor}.md"
-    if curl -sfL -m 30 -o "$archivo" "$raw" && [ -s "$archivo" ]; then
+    if curl -A "$UA" -sfL -m 30 -o "$archivo" "$raw" && [ -s "$archivo" ]; then
         echo -e "${VERDE}[+] Writeup de $autor guardado: $archivo${FIN}\n"
         return 0
     fi
@@ -179,7 +181,7 @@ writeup() {
     linea=$(buscar "$1") || return 1
     IFS=$'\t' read -r id dif NOMBRE_MAQUINA <<< "$linea"
 
-    json=$(curl -sfL -m 30 "$WEB/api/writeups/$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$NOMBRE_MAQUINA")")
+    json=$(curl -A "$UA" -sfL -m 30 "$WEB/api/writeups/$(python3 -c 'import sys,urllib.parse;print(urllib.parse.quote(sys.argv[1]))' "$NOMBRE_MAQUINA")")
     lista=$(echo "$json" | python3 -c "$LEER_WRITEUPS")
     if [ -z "$lista" ]; then
         echo -e "${ROJO}[-] $NOMBRE_MAQUINA no tiene writeups en GitHub.${FIN}"
